@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+# transient fetch log (the data files themselves are committed for reproducibility)
+data/fetch.log

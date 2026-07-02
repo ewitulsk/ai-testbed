@@ -1,0 +1,88 @@
+{
+  "data": {
+    "n_blocks": 1000000,
+    "block_range": [
+      12400000,
+      13399999
+    ],
+    "date_range": [
+      "2021-05-09T11:51:43",
+      "2021-10-11T22:36:25"
+    ],
+    "n_uncles": 48704,
+    "uncle_rate_pct": 4.8704,
+    "mean_block_time_s": 13.430695430695431
+  },
+  "P1a_distance_hist": {
+    "1": 38058,
+    "2": 5678,
+    "3": 295,
+    "4": 77,
+    "5": 35,
+    "6": 23
+  },
+  "P1a_distance_fit": {
+    "label": "uncle distance",
+    "n": 44166,
+    "alpha": 3.4928731467891163,
+    "xmin": 1,
+    "D": 0.025180512742950523,
+    "n_tail": 44166,
+    "p_fit": 0.0,
+    "vuong_R": -24.889602412314407,
+    "vuong_p": 9.642248820094894e-137,
+    "exp_lambda": 2.0201208517258293,
+    "verdict": "REJECTS power law (favours exponential -> theory fails)"
+  },
+  "P1b_burst_fit": {
+    "label": "uncle-burst size",
+    "n": 18339,
+    "alpha": 5.999993990721987,
+    "xmin": 5,
+    "D": 0.04743671186176468,
+    "n_tail": 1924,
+    "p_fit": 0.0,
+    "vuong_R": -10.473431795951639,
+    "vuong_p": 1.1441820934610861e-25,
+    "exp_lambda": 1.0555021650143805,
+    "verdict": "REJECTS power law (favours exponential -> theory fails)"
+  },
+  "P1b_burst_max": 12,
+  "P2_omori": {
+    "n_mainshocks": 123,
+    "burst_threshold": 7.0,
+    "n_aftershocks": 17465,
+    "excess_ratio_over_background": 1.0152302133822553,
+    "post_burst_rate_slope": 0.023247395417251692,
+    "omori_p_fit": 0.7636595144064442,
+    "verdict": "NO Omori decay -- rate returns to background (P2 falsified)"
+  },
+  "P3_bvalue": {
+    "mean_b": 0.20223227151732023,
+    "std_b": 0.00830168199907685,
+    "n_windows": 150
+  },
+  "P3_foreshock_bdrop": {
+    "mean_delta": -0.0020393866567309585,
+    "frac_negative": 0.5619834710743802,
+    "ttest_p": 0.031776914817727105,
+    "wilcoxon_p": 0.040628954158009906,
+    "n": 121
+  },
+  "P3_recurrence": {
+    "cv": 1.1968944132080774,
+    "mean_interval": 57367.523189655665,
+    "n_intervals": 232,
+    "null_p05": 0.8985177042777123,
+    "null_p95": 1.114768824313735,
+    "p": 0.006,
+    "interpretation": "clustered/aftershock-like (CV>1)"
+  },
+  "london_experiment": {
+    "london_block": 12965000,
+    "uncle_rate_pre_pct": 4.757493444707877,
+    "uncle_rate_post_pct": 4.753175735169175,
+    "b_pre": 0.2066041028652446,
+    "b_post": 0.20443200064963346
+  }
+}

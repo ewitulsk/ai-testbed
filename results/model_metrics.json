@@ -1,0 +1,62 @@
+{
+  "block_race_depths": {
+    "label": "block-race depths",
+    "n": 227704,
+    "alpha": 3.8456660491404207,
+    "xmin": 2,
+    "D": 0.005355428326934364,
+    "n_tail": 33627,
+    "p_fit": 0.0,
+    "vuong_R": 15.17757020081454,
+    "vuong_p": 4.978861574538062e-52,
+    "exp_lambda": 1.1031730047776802,
+    "verdict": "leans power law"
+  },
+  "block_race_omori": {
+    "n_main": 735,
+    "n_after": 114289,
+    "omori_p": 0.14557353575138848,
+    "omori_c": 322.4627206450418,
+    "delta_aic_vs_flat": 531.9527920975816,
+    "aftershocks_significant": true
+  },
+  "block_race_bvalue": {
+    "pearson_r": -0.20201003666713027,
+    "pearson_p": 0.004417349916997539,
+    "spearman_r": -0.16662435238549844,
+    "spearman_p": 0.01927419552438598,
+    "n_windows": 197,
+    "mean_b": 0.6092491511083428
+  },
+  "block_race_gap": {
+    "cv": 2.3984069509206667,
+    "mean_interval": 866.42150896048,
+    "n_intervals": 3458,
+    "null_p05": 0.9738235692573145,
+    "null_p95": 1.0277959301663029,
+    "p": 0.0,
+    "interpretation": "clustered/aftershock-like (CV>1)"
+  },
+  "stick_slip_depths": {
+    "label": "stick-slip depths",
+    "n": 23598,
+    "alpha": 5.999995194739531,
+    "xmin": 12,
+    "D": 0.12855459299338123,
+    "n_tail": 8501,
+    "p_fit": 0.0,
+    "vuong_R": -95.22530421916336,
+    "vuong_p": 0.0,
+    "exp_lambda": 0.4639781508340607,
+    "verdict": "REJECTS power law (favours exponential -> theory fails)"
+  },
+  "stick_slip_gap": {
+    "cv": 0.11263730414965466,
+    "mean_interval": 84.74979870322498,
+    "n_intervals": 23597,
+    "null_p05": 0.9889629873268658,
+    "null_p95": 1.0101941164281762,
+    "p": 0.0,
+    "interpretation": "regular/gap-like (CV<1)"
+  }
+}
