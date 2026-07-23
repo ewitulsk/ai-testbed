@@ -62,10 +62,22 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
 
 - Weights restricted to {-1,0,1} (open case `eqSystem6_no_solution_d3_trinary_int`
   in the Lean file): SAT encoding with bidirectional sequential counters,
-  CaDiCaL — RESULT: see below.
+  CaDiCaL — RESULT: see below. The run is accelerated soundly by adding the
+  rank-1 arc lemma (THEORY.md) as clauses: any {-1,0,1} solution is a ℂ solution,
+  so the lemma's structural consequences are valid constraints.
 - Reduction mod p: an integer-weight solution reduces to a solution over GF(p).
   Hence UNSAT over any single prime field resolves
   `eqSystem6_no_solution_d3_int` (all integer weights) — RESULT: see below.
+- Certification pipeline (`certify.py`): DIMACS dump + DRAT proof logging.
+  Demonstrated on N=4, D=4 trinary: UNSAT with a 60k-line DRAT certificate
+  (`trinary_n4d4.cnf/.drat`) — an independently checkable replication of
+  Problem 1's answer in the discrete setting.
+- Mini-lemma (verified exhaustively): every 3 pairwise-disjoint perfect
+  matchings of K6 admit a "rainbow" perfect matching (checked all 80 disjoint
+  triples). Equivalently the naive three-monochromatic-PM construction always
+  leaves an odd, uncancellable bad coloring — this is precisely Bogdanov's
+  positivity obstruction in miniature, and the mod-2 shadow of the t^{-6} term
+  of the border family.
 
 (Encodings validated on all solvable calibration cases: N=4 D=2/D=3, N=6 D=2,
 including GF(2) and GF(3); every SAT witness re-verified against the definition.)
