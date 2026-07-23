@@ -82,6 +82,16 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
 (Encodings validated on all solvable calibration cases: N=4 D=2/D=3, N=6 D=2,
 including GF(2) and GF(3); every SAT witness re-verified against the definition.)
 
+### (b2) Preliminary: (8,3) does not look border-achievable
+
+The same LM search applied to N=8, D=3 floors at cost 0.5 (the
+drop-one-equation optimum) on its first converged start, in sharp contrast to
+(6,3) where every random start reaches ~1e-8 via the border family. The
+two-triangle construction is parity-blocked for n ≡ 0 (mod 4). Preliminary
+(one start), but suggests the monochromatic fidelity supremum for (8,3) may be
+< 1, which would make (8,3) qualitatively *easier* to attack than (6,3)
+(closed-set separation admits, in principle, rigorous numerical certificates).
+
 ### (c) State of the complex case
 
 The full ℂ case for (6,3) is 729 cubic equations in 135 complex unknowns and
