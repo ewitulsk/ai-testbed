@@ -1,0 +1,2 @@
+765ba9875af06a66ffc3fbe6f3484bcfbe160bf3f500617cfd59efdb6f3e1377  trinary_n6d3_arc_wlog.cnf
+269b804e5e4f9a4a9ed8ba4f3e45bcfeb03282f6dc1cd64eea53d748ed2262c7  trinary_n6d3_arc_wlog.drat

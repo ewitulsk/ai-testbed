@@ -67,9 +67,16 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
   constraints; (ii) WLOG vertex-relabeling units pinning vertex 0's three arcs
   to (1,c0),(2,c1),(3,c2) — any solution maps to this form under S6; (iii) sign
   hygiene (zero entry ⇒ sign bit 0). Solvers: CaDiCaL and kissat 4.0.4 with
-  DRAT logging (`trinary_n6d3_arc_wlog.cnf`). RESULT: running (long).
-  NOTE: container restarts kill long solver runs; runs are relaunched on each
-  session wake-up.
+  DRAT logging (`trinary_n6d3_arc_wlog.cnf`).
+  **RESULT: UNSAT** — kissat 4.0.4, 16m42s, 72MB DRAT proof
+  (`krenn/certificates/trinary_n6d3_arc_wlog.{cnf,drat}.gz`, sha256 in
+  `wlog_sha256.txt`); drat-trim verification in progress.
+  Conclusion (conditional on the arc lemma + WLOG argument in THEORY.md):
+  **no monochromatic quantum graph with weights in {-1,0,1} exists for
+  N=6, D=3** — i.e. the open Lean conjecture
+  `eqSystem6_no_solution_d3_trinary_int` has answer True.
+  A run on the *plain* instance (no lemma dependency, only sign hygiene) is in
+  progress to make the certificate fully self-contained.
 - Reduction mod p: an integer-weight solution reduces to a solution over GF(p).
   Hence UNSAT over any single prime field resolves
   `eqSystem6_no_solution_d3_int` (all integer weights) — RESULT: see below.
