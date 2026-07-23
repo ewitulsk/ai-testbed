@@ -70,7 +70,8 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
   DRAT logging (`trinary_n6d3_arc_wlog.cnf`).
   **RESULT: UNSAT** — kissat 4.0.4, 16m42s, 72MB DRAT proof
   (`krenn/certificates/trinary_n6d3_arc_wlog.{cnf,drat}.gz`, sha256 in
-  `wlog_sha256.txt`); drat-trim verification in progress.
+  `wlog_sha256.txt`); **DRAT proof VERIFIED by drat-trim** (`s VERIFIED`,
+  878s, 489124 core lemmas, 22.4M resolution steps).
   Conclusion (conditional on the arc lemma + WLOG argument in THEORY.md):
   **no monochromatic quantum graph with weights in {-1,0,1} exists for
   N=6, D=3** — i.e. the open Lean conjecture
