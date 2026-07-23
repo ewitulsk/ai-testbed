@@ -61,10 +61,15 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
 ### (b) Exact discrete results (new, this session)
 
 - Weights restricted to {-1,0,1} (open case `eqSystem6_no_solution_d3_trinary_int`
-  in the Lean file): SAT encoding with bidirectional sequential counters,
-  CaDiCaL — RESULT: see below. The run is accelerated soundly by adding the
-  rank-1 arc lemma (THEORY.md) as clauses: any {-1,0,1} solution is a ℂ solution,
-  so the lemma's structural consequences are valid constraints.
+  in the Lean file): SAT encoding with bidirectional sequential counters.
+  Accelerated soundly by (i) the rank-1 arc lemma (THEORY.md) as clauses — any
+  {-1,0,1} solution is a ℂ solution, so the lemma's consequences are valid
+  constraints; (ii) WLOG vertex-relabeling units pinning vertex 0's three arcs
+  to (1,c0),(2,c1),(3,c2) — any solution maps to this form under S6; (iii) sign
+  hygiene (zero entry ⇒ sign bit 0). Solvers: CaDiCaL and kissat 4.0.4 with
+  DRAT logging (`trinary_n6d3_arc_wlog.cnf`). RESULT: running (long).
+  NOTE: container restarts kill long solver runs; runs are relaunched on each
+  session wake-up.
 - Reduction mod p: an integer-weight solution reduces to a solution over GF(p).
   Hence UNSAT over any single prime field resolves
   `eqSystem6_no_solution_d3_int` (all integer weights) — RESULT: see below.
