@@ -60,7 +60,12 @@ The canonical form of a configuration is the minimum encoding over these 72
 images; two normalized configurations lie in the same S6 x S3 orbit iff their
 canonical forms agree.
 
-Usage:  python3 arc_cases.py stage1|burnside|stage2|stage3  (see main below).
+Usage:
+    python3 arc_cases.py burnside        # orbit count of the raw space
+    python3 arc_cases.py stage1          # DFS + rule A -> survivorsA.npy
+    python3 arc_cases.py stage2          # canonicalization -> canonicalA.npy
+    python3 arc_cases.py stagecd         # tiered rules B/C/D over canonical reps
+    python3 arc_cases.py stagecd-report  # aggregate shard counts + classify
 CPU-friendly: single process; intended to run under `nice -n 15`.
 """
 import itertools
@@ -599,6 +604,19 @@ def kill_by_w_groebner(A, verbose=False):
 
 
 # ---------------------------------------------------------------------------
+# Krenn's limiting family (border class)
+# ---------------------------------------------------------------------------
+# Support: triangles {0,1,2}, {3,4,5} (weight t) + cross matching 03,14,25
+# (weight t^-2); forced color pairs: triangle edge {i,j} single entry (k,k)
+# with k the opposite vertex('s color), cross edge {i,i+3} single entry (i,i).
+# pmSum residual is exactly t^-6 (checked numerically), concentrated on the
+# coloring iota* = (0,1,2,0,1,2) whose only alive PM (with all free edges = 0)
+# is the cross matching.
+KRENN_BORDER = ((3, 2, 1), (2, 4, 0), (1, 0, 5), (0, 5, 4), (5, 1, 3), (4, 3, 2))
+KRENN_BORDER_CANONICAL = 127091349204
+
+
+# ---------------------------------------------------------------------------
 # Branch-and-propagate class killer (sound refutation engine)
 # ---------------------------------------------------------------------------
 # Facts it reasons with, all consequences of the arc lemma:
@@ -862,6 +880,74 @@ def _full_groebner_refute(table, Z, NZ, stats):
     return res
 
 
+# vectorized root propagation (rule C at the root, no splitting) ------------
+_COL = np.array(list(itertools.product(range(3), repeat=6)), dtype=np.int8)
+_TGT = (_COL.max(axis=1) == _COL.min(axis=1))
+_PM_EDGE = [[(ei(u, v), u, v) for (u, v) in pm] for pm in PM_PAIRS]
+
+
+def rule_c_root(A):
+    """True iff the class is killed by zero/nonzero propagation at the root.
+    Vectorized equivalent of kill_by_branching(A, max_depth=0, budget=1)."""
+    ea = edge_arcs(A)
+    allowed = np.zeros((15, 3, 3), dtype=bool)
+    guaranteed = np.zeros((15, 3, 3), dtype=bool)
+    for idx in range(15):
+        arcs = ea.get(idx, [])
+        u, v = EDGES[idx]
+        if len(arcs) == 2:
+            d = {y: c for (x, y, c) in arcs}
+            allowed[idx, d[u], d[v]] = True
+            guaranteed[idx, d[u], d[v]] = True
+        elif len(arcs) == 1:
+            (x, y, c) = arcs[0]
+            if y == v:
+                allowed[idx, :, c] = True
+            else:
+                allowed[idx, c, :] = True
+        else:
+            allowed[idx] = True
+    nz = guaranteed.copy()          # proven-nonzero entries
+    zero = np.zeros_like(allowed)
+    ecoords = []                    # per PM: (edge_idx, iu_col, iv_col) arrays
+    for pmedges in _PM_EDGE:
+        ecoords.append([(e, _COL[:, u], _COL[:, v]) for (e, u, v) in pmedges])
+    while True:
+        cur = allowed & ~zero
+        alive = np.ones((729, 15), dtype=bool)
+        for m, trip in enumerate(ecoords):
+            a = cur[trip[0][0], trip[0][1], trip[0][2]]
+            a &= cur[trip[1][0], trip[1][1], trip[1][2]]
+            a &= cur[trip[2][0], trip[2][1], trip[2][2]]
+            alive[:, m] = a
+        cnt = alive.sum(axis=1)
+        if np.any(_TGT & (cnt == 0)):
+            return True
+        changed = False
+        for k in np.nonzero(cnt == 1)[0]:
+            m = int(np.argmax(alive[k]))
+            iota = _COL[k]
+            und = []
+            for (e, u, v) in _PM_EDGE[m]:
+                a, b = int(iota[u]), int(iota[v])
+                if not nz[e, a, b]:
+                    und.append((e, a, b))
+            if _TGT[k]:
+                for (e, a, b) in und:
+                    if not nz[e, a, b]:
+                        nz[e, a, b] = True
+                        changed = True
+            else:
+                if not und:
+                    return True
+                if len(und) == 1:
+                    (e, a, b) = und[0]
+                    zero[e, a, b] = True
+                    changed = True
+        if not changed:
+            return False
+
+
 def kill_by_branching(A, max_depth=12, budget=20000, leaf_groebner=False,
                       leaf_timeout=60, leaf_var_cap=40, dpll=False):
     """Sound refutation attempt for a configuration class. True => class killed."""
@@ -891,6 +977,60 @@ def main():
         uniq = np.unique(can)
         np.save(os.path.join(SCRATCH, "canonicalA.npy"), uniq)
         print(f"rule-A survivors up to symmetry: {len(uniq)}")
+    elif cmd == "stagecd":
+        # tiered pruning of canonical rule-A survivors:
+        # 0 = rule B, 1 = rule C (root propagation), 2 = rule D (branching,
+        # depth 12 / 3000 nodes, cached Groebner endgame), 3 = survivor
+        uniq = np.load(os.path.join(SCRATCH, "canonicalA.npy"))
+        N = len(uniq)
+        shard = 100_000
+        nsh = (N + shard - 1) // shard
+        print(f"canonical rule-A survivors: {N} ({nsh} shards)", flush=True)
+        t00 = time.time()
+        for sh in range(nsh):
+            path = os.path.join(SCRATCH, f"codes_{sh}.npy")
+            if os.path.exists(path):
+                continue
+            lo, hi = sh * shard, min(N, (sh + 1) * shard)
+            codes = np.empty(hi - lo, dtype=np.uint8)
+            t0 = time.time()
+            if len(_GROEBNER_CACHE) > 200_000:
+                _GROEBNER_CACHE.clear()
+            for k in range(lo, hi):
+                A = decode(int(uniq[k]))
+                if rule_b_violation(A):
+                    codes[k - lo] = 0
+                elif rule_c_root(A):
+                    codes[k - lo] = 1
+                elif kill_by_branching(A, max_depth=12, budget=3000):
+                    codes[k - lo] = 2
+                else:
+                    codes[k - lo] = 3
+            np.save(path, codes)
+            c = np.bincount(codes, minlength=4)
+            print(f"shard {sh+1}/{nsh}: B={c[0]} C={c[1]} D={c[2]} "
+                  f"alive={c[3]} ({time.time()-t0:.0f}s, "
+                  f"total {(time.time()-t00)/60:.1f}m)", flush=True)
+    elif cmd == "stagecd-report":
+        import glob as _glob
+        uniq = np.load(os.path.join(SCRATCH, "canonicalA.npy"))
+        files = sorted(_glob.glob(os.path.join(SCRATCH, "codes_*.npy")),
+                       key=lambda p: int(p.rsplit("_", 1)[1][:-4]))
+        codes = np.concatenate([np.load(f) for f in files])
+        c = np.bincount(codes, minlength=4)
+        print(f"processed {len(codes)}/{len(uniq)} canonical classes")
+        print(f"killed by rule B: {c[0]}")
+        print(f"killed by rule C (root propagation): {c[1]}")
+        print(f"killed by rule D (branching d12/b3000): {c[2]}")
+        print(f"still alive: {c[3]}")
+        # classify the survivors
+        hist = {}
+        for k in np.nonzero(codes == 3)[0]:
+            A = decode(int(uniq[k]))
+            key = classify(A)
+            hist[key] = hist.get(key, 0) + 1
+        for k in sorted(hist):
+            print(f"  survivors with (#arc-edges, #doubly-arced) = {k}: {hist[k]}")
     elif cmd == "stage2b":
         uniq = np.load(os.path.join(SCRATCH, "canonicalA.npy"))
         keep = []
