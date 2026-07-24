@@ -80,7 +80,15 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
   progress to make the certificate fully self-contained.
 - Reduction mod p: an integer-weight solution reduces to a solution over GF(p).
   Hence UNSAT over any single prime field resolves
-  `eqSystem6_no_solution_d3_int` (all integer weights) — RESULT: see below.
+  `eqSystem6_no_solution_d3_int` (all integer weights).
+  **RESULT: the symmetry-broken GF(2) instance is UNSAT** (CryptoMiniSat via
+  gf2_sym.py, lex-leader breaking over S6 × S3 generators, ~4h). Modulo the
+  soundness of the standard lex-leader encoding, this proves: **no integer-weight
+  monochromatic quantum graph exists for N=6, D=3** — resolving
+  `eqSystem6_no_solution_d3_int` (answer True), and subsuming the trinary result
+  without any dependence on the arc lemma. A kissat+DRAT run on the *plain*
+  (symmetry-free) GF(2) instance (21,276 vars / 85,293 clauses) is underway to
+  make this fully certificate-backed.
 - Certification pipeline (`certify.py`): DIMACS dump + DRAT proof logging.
   Demonstrated on N=4, D=4 trinary: UNSAT with a 60k-line DRAT certificate
   (`trinary_n4d4.cnf/.drat`) — an independently checkable replication of
