@@ -412,6 +412,467 @@ def classify(A):
 
 
 # ---------------------------------------------------------------------------
+# All-doubled classes (18 arcs on 9 doubly-arced edges; support = cubic graph)
+# ---------------------------------------------------------------------------
+def support_graph(A):
+    return frozenset(edge_arcs(A).keys())
+
+
+def is_bipartite_support(supp):
+    """True iff support graph is K3,3 (else, for cubic support, it is the prism)."""
+    adj = {v: set() for v in range(6)}
+    for e in supp:
+        u, v = EDGES[e]
+        adj[u].add(v)
+        adj[v].add(u)
+    color = {0: 0}
+    stack = [0]
+    while stack:
+        x = stack.pop()
+        for y in adj[x]:
+            if y in color:
+                if color[y] == color[x]:
+                    return False
+            else:
+                color[y] = 1 - color[x]
+                stack.append(y)
+    return True
+
+
+def all_doubled_classes():
+    """Enumerate all-doubled configs directly; return dict canonical -> info.
+
+    A config has all 18 arcs on 9 doubly-arced edges iff every vertex's arc
+    targets are exactly its neighbors in a cubic support graph (each ordered
+    pair on a support edge carries exactly one arc). Support graphs on 6
+    vertices that are cubic: the prism K3 x K2 and K3,3.
+    """
+    # labeled cubic graphs with N(0) = {1,2,3} (normalization compatibility)
+    graphs = []
+    for es in itertools.combinations(range(15), 9):
+        deg = [0] * 6
+        for e in es:
+            u, v = EDGES[e]
+            deg[u] += 1
+            deg[v] += 1
+        if any(d != 3 for d in deg):
+            continue
+        nbr0 = {v for (u, v) in (EDGES[e] for e in es) if u == 0}
+        if nbr0 == {1, 2, 3}:
+            graphs.append(es)
+    out = {}
+    stats = {"graphs": len(graphs), "rawA": 0}
+    for es in graphs:
+        adj = {v: [] for v in range(6)}
+        for e in es:
+            u, v = EDGES[e]
+            adj[u].append(v)
+            adj[v].append(u)
+        for p in itertools.product(*(itertools.permutations(adj[v])
+                                     for v in range(1, 6))):
+            A = ((1, 2, 3),) + p
+            if not rule_a(A):
+                continue
+            stats["rawA"] += 1
+            can = canonical(A)
+            if can not in out:
+                supp = support_graph(A)
+                out[can] = {
+                    "A": decode(can),
+                    "support": "K33" if is_bipartite_support(supp) else "prism",
+                    "ruleB_killed": rule_b_violation(decode(can)),
+                }
+    return out, stats
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: exact polynomial system for a configuration class
+# ---------------------------------------------------------------------------
+def build_system(A):
+    """Return (W, syms) where W[eidx] is a 3x3 sympy matrix with the structural
+    zeros dictated by the arcs, and syms = dict of symbol groups.
+
+    Orientation: W[eidx][a, b] with a the color at u, b the color at v (u < v),
+    matching mqg.py / the Lean formalization. An arc x->y labeled c zeroes all
+    entries whose y-side index != c."""
+    import sympy as sp
+    ea = edge_arcs(A)
+    W = {}
+    syms = {"w": [], "beta": [], "free": []}
+    for idx, (u, v) in enumerate(EDGES):
+        arcs = ea.get(idx, [])
+        M = sp.zeros(3, 3)
+        if len(arcs) == 2:
+            d = {y: c for (x, y, c) in arcs}
+            w = sp.Symbol(f"w{u}{v}")
+            M[d[u], d[v]] = w
+            syms["w"].append(w)
+        elif len(arcs) == 1:
+            (x, y, c) = arcs[0]
+            row = []
+            for a in range(3):
+                s = sp.Symbol(f"b{u}{v}_{a}")
+                row.append(s)
+                if y == v:
+                    M[a, c] = s      # v-side forced to c, u-side index free
+                else:
+                    M[c, a] = s      # u-side forced to c, v-side index free
+            syms["beta"].append(tuple(row))
+        else:
+            for a in range(3):
+                for b in range(3):
+                    s = sp.Symbol(f"f{u}{v}_{a}{b}")
+                    M[a, b] = s
+                    syms["free"].append(s)
+        W[idx] = M
+    return W, syms
+
+
+def pm_sum_expr(W, iota):
+    import sympy as sp
+    total = sp.Integer(0)
+    for pm in PM_PAIRS:
+        term = sp.Integer(1)
+        for (u, v) in pm:
+            f = W[ei(u, v)][iota[u], iota[v]]
+            if f == 0:
+                term = sp.Integer(0)
+                break
+            term = term * f
+        total += term
+    return sp.expand(total)
+
+
+def w_only_equations(A, W=None, syms=None):
+    """All equations pmSum(iota) = target whose expression involves only the
+    doubly-arced single-entry weights w_e (guaranteed nonzero). Returns list of
+    (iota, expr, target)."""
+    import sympy as sp
+    if W is None:
+        W, syms = build_system(A)
+    wset = set(syms["w"])
+    out = []
+    for iota in itertools.product(range(3), repeat=6):
+        e = pm_sum_expr(W, iota)
+        fs = e.free_symbols
+        if fs and fs <= wset:
+            tgt = 1 if len(set(iota)) == 1 else 0
+            out.append((iota, e, tgt))
+        elif not fs:
+            tgt = 1 if len(set(iota)) == 1 else 0
+            if e != tgt:
+                out.append((iota, e, tgt))   # constant contradiction (0 = 1)
+    return out
+
+
+def kill_by_w_groebner(A, verbose=False):
+    """Sound class killer: take the subsystem of equations involving only the
+    guaranteed-nonzero doubled weights w_e, saturate by prod(w) != 0, and check
+    1 in ideal (over Q). Returns True iff the class is PROVEN infeasible."""
+    import sympy as sp
+    W, syms = build_system(A)
+    eqs = w_only_equations(A, W, syms)
+    if not eqs:
+        return False
+    polys = []
+    for iota, e, tgt in eqs:
+        if not e.free_symbols:
+            if e != tgt:
+                return True                    # 0 = 1 style contradiction
+            continue
+        polys.append(sp.expand(e - tgt))
+    if not polys:
+        return False
+    t = sp.Symbol("t_aux")
+    sat = t * sp.prod(syms["w"]) - 1
+    gens = list(syms["w"]) + [t]
+    try:
+        gb = sp.groebner(polys + [sat], *gens, order="grevlex")
+        killed = 1 in gb.exprs or sp.Integer(1) in gb.exprs
+    except Exception as ex:
+        if verbose:
+            print("groebner failed:", ex)
+        return False
+    if verbose:
+        print(f"{len(polys)} w-only eqs, killed={killed}")
+    return killed
+
+
+# ---------------------------------------------------------------------------
+# Branch-and-propagate class killer (sound refutation engine)
+# ---------------------------------------------------------------------------
+# Facts it reasons with, all consequences of the arc lemma:
+#   * doubled-edge weights w_e are nonzero;
+#   * every other symbol (free-edge entry, or component of a singly-arced
+#     edge's beta vector) may or may not vanish;
+#   * the 729 equations pmSum(iota) = [iota constant], where each surviving
+#     monomial is a product of symbols from the 3 edges of an alive PM.
+# Derivation rules on a branch state (Z = symbols proven 0, NZ = proven != 0):
+#   - a term is dead if one of its possibly-zero symbols is in Z;
+#   - eq (=1) with no live terms ............................ contradiction
+#   - eq (=0) with exactly one live term, all of whose
+#     possibly-zero symbols are in NZ (e.g. a pure-w term) ... contradiction
+#   - eq (=1) with exactly one live term .................... all its symbols to NZ
+#   - eq (=0) with exactly one live term and exactly one
+#     symbol not yet in NZ ................................. that symbol to Z
+#   - eq (=0) with one live term and k>=2 undetermined
+#     symbols ............................................... case split (one of
+#     them must vanish; k branches)
+#   - eqs whose live terms are all pure-w .................. collected; endgame
+#     Groebner basis over Q[w, t]/(t*prod(w)-1): 1 in ideal => contradiction.
+# The engine returns True only if EVERY branch of the split tree is closed by a
+# contradiction; this is a sound proof that the configuration class admits no
+# solution.
+def _term_table(A):
+    """For each of the 729 colorings: target and list of terms.
+    Term = (frozenset of w-ids, frozenset of other-ids). Symbol ids are
+    (eidx, a, b) entry coordinates; w-ids are eidx alone."""
+    ea = edge_arcs(A)
+    entry_kind = {}   # eidx -> ('w', (cu,cv)) | ('b',(x,y,c)) | 'free'
+    for idx in range(15):
+        arcs = ea.get(idx, [])
+        u, v = EDGES[idx]
+        if len(arcs) == 2:
+            d = {y: c for (x, y, c) in arcs}
+            entry_kind[idx] = ("w", (d[u], d[v]))
+        elif len(arcs) == 1:
+            entry_kind[idx] = ("b", arcs[0])
+        else:
+            entry_kind[idx] = ("free", None)
+    table = []
+    for iota in itertools.product(range(3), repeat=6):
+        terms = []
+        for pm in PM_PAIRS:
+            wids, oids = [], []
+            ok = True
+            for (u, v) in pm:
+                idx = ei(u, v)
+                kind, info = entry_kind[idx]
+                a, b = iota[u], iota[v]
+                if kind == "w":
+                    if (a, b) != info:
+                        ok = False
+                        break
+                    wids.append(idx)
+                elif kind == "b":
+                    (x, y, c) = info
+                    if iota[y] != c:
+                        ok = False
+                        break
+                    oids.append((idx, a, b))
+                else:
+                    oids.append((idx, a, b))
+            if ok:
+                terms.append((frozenset(wids), frozenset(oids)))
+        tgt = 1 if len(set(iota)) == 1 else 0
+        table.append((iota, tgt, terms))
+    return table
+
+
+_GROEBNER_CACHE = {}
+
+
+def _groebner_refute(eq_keys):
+    """eq_keys: frozenset of (tgt, terms) with terms a tuple of
+    (w-id tuple, nz-id tuple). All symbols saturated (known nonzero).
+    True iff 1 lies in the saturated ideal (=> contradiction)."""
+    import sympy as sp
+    key = frozenset(eq_keys)
+    if key in _GROEBNER_CACHE:
+        return _GROEBNER_CACHE[key]
+    syms = {}
+
+    def sym(s):
+        if s not in syms:
+            syms[s] = sp.Symbol(f"v{len(syms)}")
+        return syms[s]
+
+    polys = []
+    trivial = False
+    for tgt, terms in eq_keys:
+        expr = sp.Integer(-tgt)
+        for wids, oids in terms:
+            m = sp.Integer(1)
+            for x in wids:
+                m *= sym(("w", x))
+            for x in oids:
+                m *= sym(("o", x))
+            expr += m
+        if not expr.free_symbols:
+            if expr != 0:
+                trivial = True
+            continue
+        polys.append(expr)
+    res = False
+    if trivial:
+        res = True
+    elif polys:
+        import signal
+        t = sp.Symbol("t_aux")
+        gens = list(syms.values()) + [t]
+        sat = t * sp.prod(list(syms.values())) - 1
+
+        def _to(signum, frame):
+            raise TimeoutError
+
+        old = signal.signal(signal.SIGALRM, _to)
+        signal.alarm(30)
+        try:
+            gb = sp.groebner(polys + [sat], *gens, order="grevlex")
+            res = 1 in gb.exprs or sp.Integer(1) in gb.exprs
+        except (TimeoutError, Exception):
+            res = False
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
+    _GROEBNER_CACHE[key] = res
+    return res
+
+
+def _close_branch(table, Z, NZ, depth, stats):
+    """Return True iff branch provably contradictory (sound)."""
+    Z = set(Z)
+    NZ = set(NZ)
+    stats["nodes"] += 1
+    if stats["nodes"] > stats["budget"]:
+        return False
+    # propagation to fixpoint
+    while True:
+        changed = False
+        split = None
+        for iota, tgt, terms in table:
+            live = [t for t in terms if not (t[1] & Z)]
+            if not live:
+                if tgt == 1:
+                    return True
+                continue
+            if len(live) == 1:
+                und = live[0][1] - NZ
+                if tgt == 1:
+                    if und:
+                        NZ |= und
+                        changed = True
+                else:
+                    if not und:
+                        return True      # product of guaranteed nonzeros = 0
+                    if len(und) == 1:
+                        Z.add(next(iter(und)))
+                        changed = True
+                    elif split is None or len(und) < len(split):
+                        split = und
+        if not changed:
+            break
+    if split is not None and depth < stats["max_depth"]:
+        stats["splits"] += 1
+        return all(_close_branch(table, Z | {s}, NZ, depth + 1, stats)
+                   for s in split)
+    # DPLL fallback: branch on an undecided symbol being zero / nonzero
+    if stats.get("dpll") and depth < stats["max_depth"]:
+        from collections import Counter
+        cnt = Counter()
+        for iota, tgt, terms in table:
+            for t in terms:
+                if not (t[1] & Z):
+                    for s in t[1] - NZ:
+                        cnt[s] += 1
+        if cnt:
+            s = cnt.most_common(1)[0][0]
+            stats["splits"] += 1
+            return (_close_branch(table, Z | {s}, NZ, depth + 1, stats) and
+                    _close_branch(table, Z, NZ | {s}, depth + 1, stats))
+    # endgame 1: equations whose live terms carry only guaranteed-nonzero symbols
+    eq_keys = set()
+    for iota, tgt, terms in table:
+        live = [t for t in terms if not (t[1] & Z)]
+        if live and all(t[1] <= NZ for t in live):
+            eq_keys.add((tgt, tuple(sorted(
+                (tuple(sorted(t[0])), tuple(sorted(t[1]))) for t in live))))
+    if eq_keys and _groebner_refute(frozenset(eq_keys)):
+        return True
+    # endgame 2: full Groebner refutation of the whole reduced system
+    if stats.get("leaf_groebner"):
+        if _full_groebner_refute(table, Z, NZ, stats):
+            return True
+    return False
+
+
+def _full_groebner_refute(table, Z, NZ, stats):
+    """Reduced full system at a leaf: substitute the proven zeros, keep all live
+    equations, saturate the w's and the proven-nonzero symbols, ask sympy for a
+    Groebner basis; 1 in the ideal is a sound refutation. Guarded by SIGALRM."""
+    import signal
+    import sympy as sp
+    eq_keys = set()
+    for iota, tgt, terms in table:
+        live = tuple(sorted((tuple(sorted(t[0])), tuple(sorted(t[1])))
+                            for t in terms if not (t[1] & Z)))
+        if live or tgt:
+            eq_keys.add((tgt, live))
+    key = ("full", frozenset(eq_keys), frozenset(NZ))
+    if key in _GROEBNER_CACHE:
+        return _GROEBNER_CACHE[key]
+    syms = {}
+
+    def sym(kind, s):
+        if (kind, s) not in syms:
+            syms[(kind, s)] = sp.Symbol(f"v{len(syms)}")
+        return syms[(kind, s)]
+
+    polys = []
+    res = False
+    for tgt, live in eq_keys:
+        expr = sp.Integer(-tgt)
+        for wids, oids in live:
+            m = sp.Integer(1)
+            for x in wids:
+                m *= sym("w", x)
+            for x in oids:
+                m *= sym("o", x)
+            expr += m
+        if not expr.free_symbols:
+            if expr != 0:
+                res = True
+                break
+        else:
+            polys.append(expr)
+    nvar = len(syms)
+    if not res and polys and nvar <= stats.get("leaf_var_cap", 40):
+        satsyms = ([v for (k, s), v in syms.items() if k == "w"] +
+                   [v for (k, s), v in syms.items() if k == "o" and s in NZ])
+        t = sp.Symbol("t_aux")
+        gens = list(syms.values()) + [t]
+        eqs = list(polys)
+        if satsyms:
+            eqs.append(t * sp.prod(satsyms) - 1)
+
+        def _to(signum, frame):
+            raise TimeoutError
+
+        old = signal.signal(signal.SIGALRM, _to)
+        signal.alarm(stats.get("leaf_timeout", 60))
+        try:
+            gb = sp.groebner(eqs, *gens, order="grevlex")
+            res = 1 in gb.exprs or sp.Integer(1) in gb.exprs
+        except (TimeoutError, Exception):
+            res = False
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
+    _GROEBNER_CACHE[key] = res
+    return res
+
+
+def kill_by_branching(A, max_depth=12, budget=20000, leaf_groebner=False,
+                      leaf_timeout=60, leaf_var_cap=40, dpll=False):
+    """Sound refutation attempt for a configuration class. True => class killed."""
+    table = _term_table(A)
+    stats = {"splits": 0, "nodes": 0, "budget": budget, "max_depth": max_depth,
+             "leaf_groebner": leaf_groebner, "leaf_timeout": leaf_timeout,
+             "leaf_var_cap": leaf_var_cap, "dpll": dpll}
+    return _close_branch(table, set(), set(), 0, stats)
+
+
+# ---------------------------------------------------------------------------
 # Stages runnable from the command line
 # ---------------------------------------------------------------------------
 def main():

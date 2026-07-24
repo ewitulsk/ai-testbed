@@ -96,6 +96,10 @@ Any resolution of the conjecture must be exact/algebraic, not approximative.
 including GF(2) and GF(3); every SAT witness re-verified against the definition.)
 
 ### (b2) Preliminary: (8,3) does not look border-achievable
+**[SUPERSEDED — see `N8D3_STUDY.md`: (8,3) IS border-achievable; an explicit
+single-entry family (two triangles + color-coupled extra pair) satisfies all
+6561 equations except two with residual t^-1; verified exactly in sympy. The
+0.5 LM floor below was a basin artifact.]**
 
 The same LM search applied to N=8, D=3 floors at cost 0.5 (the
 drop-one-equation optimum) on its first converged start, in sharp contrast to
